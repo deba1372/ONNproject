@@ -40,6 +40,10 @@ class Disp(object):
         self.biases = []
         self.weights = []
         self.threshold_array = np.array([])
+        self.min_array_without_led = np.array([])
+        self.min_array_with_led = np.array([])
+        self.max_array_without_led = np.array([])
+        self.max_array_with_led = np.array([])
 
     def crop(self, image_path, coords, saved_location):
         """
@@ -68,7 +72,7 @@ class Disp(object):
 
     def start(self):
         """ In order to initialise the self.all_points_array  -  also going to be using the array
-        at the end in order to define the threshold array"""
+        at the end in order to define the threshold array """
 
         led= LED(21)
         # Raspberry Pi pin configuration:
@@ -393,10 +397,10 @@ class Disp(object):
         img.putdata(test_image_data)
         img.save('verify.jpg')
 
-        min_array_without_led = np.zeros((self.height, self.width))
-        min_array_with_led = np.zeros((self.height, self.width))
-        max_array_without_led = np.zeros((self.height, self.width))
-        max_array_with_led = np.zeros((self.height, self.width))
+        self.min_array_without_led = np.zeros((self.height, self.width))
+        self.min_array_with_led = np.zeros((self.height, self.width))
+        self.max_array_without_led = np.zeros((self.height, self.width))
+        self.max_array_with_led = np.zeros((self.height, self.width))
 
         draw.rectangle((0, 0, self.width, self.height), outline=0, fill=0)
         # drawing a grid that is separated by 4 units in the vertical and 2 units in the horizontal
@@ -427,8 +431,7 @@ class Disp(object):
         im = cv2.imread(image)
         for i in range(self.height):
             for j in range(self.width):
-                max_array_without_led[i][j] = im[int(self.all_points_array[i][j][0])][int(self.all_points_array[i][j][1])][2]
-        print('max and min for on array without led', max_array_without_led.max(), max_array_without_led.min())
+                self.max_array_without_led[i][j] = im[int(self.all_points_array[i][j][0])][int(self.all_points_array[i][j][1])][2]
 
         led.on()
         draw.rectangle((0, 0, self.width, self.height), outline=0, fill=0)
@@ -460,9 +463,7 @@ class Disp(object):
         im = cv2.imread(image)
         for i in range(self.height):
             for j in range(self.width):
-                max_array_with_led[i][j] = im[int(self.all_points_array[i][j][0])][int(self.all_points_array[i][j][1])][2]
-        print('max and min for on array with led', max_array_with_led.max(), max_array_with_led.min())
-
+                self.max_array_with_led[i][j] = im[int(self.all_points_array[i][j][0])][int(self.all_points_array[i][j][1])][2]
 
         led.on()
         draw.rectangle((0, 0, self.width, self.height), outline=0, fill=0)
@@ -489,8 +490,7 @@ class Disp(object):
         im = cv2.imread(image)
         for i in range(self.height):
             for j in range(self.width):
-                min_array_with_led[i][j] = im[int(self.all_points_array[i][j][0])][int(self.all_points_array[i][j][1])][2]
-        print('max and min for off array with led', min_array_with_led.max(), min_array_with_led.min())
+                self.min_array_with_led[i][j] = im[int(self.all_points_array[i][j][0])][int(self.all_points_array[i][j][1])][2]
 
         led.off()
         draw.rectangle((0, 0, self.width, self.height), outline=0, fill=0)
@@ -517,14 +517,97 @@ class Disp(object):
         im = cv2.imread(image)
         for i in range(self.height):
             for j in range(self.width):
-                min_array_without_led[i][j] = im[int(self.all_points_array[i][j][0])][int(self.all_points_array[i][j][1])][2]
-        print('max and min for off array without led', min_array_without_led.max(), min_array_without_led.min())
+                self.min_array_without_led[i][j] = im[int(self.all_points_array[i][j][0])][int(self.all_points_array[i][j][1])][2]
 
+        camera.close()
 
-        # print(time.time() - start_time)
+    def read_led(self, input):
+        led = LED(21)
+
+        if input == 1:
+            led.on()
+        else:
+            led.off()
+        # Raspberry Pi pin configuration:
+        RST = 24
+        # 128x64 display with hardware I2C:
+        disp = Adafruit_SSD1306.SSD1306_128_64(rst=RST)
+
+        disp.begin()
+        disp.clear()
+        disp.display()
+
+        self.width = disp.width
+        self.height = disp.height
+        image_1 = Image.new('1', (self.width, self.height))
+
+        # Get drawing object to draw on image.
+        draw = ImageDraw.Draw(image_1)
+
+        test_array = np.ones((self.height, self.width), dtype=int)
+        # Draw a black filled box to clear the image.
+        draw.rectangle((0, 0, self.width, self.height), outline=0, fill=0)
+        # drawing a grid that is separated by 4 units in the vertical and 2 units in the horizontal
+        for i in range(0, self.height):
+            for j in range(0, self.width):
+                if test_array[i][j] > 0:
+                    draw.point([(j, i)], fill=255)  # x,y
+
+        disp.image(image_1)
+        disp.display()
+        # made the display needed to find the points
+
+        # Now get the pixel data
+
+        camera = picamera.PiCamera()
+        camera.resolution = (2592, 1944)
+        camera.start_preview()
+        camera.led = False
+        time.sleep(2)
+        camera.capture('full_multi_point_2.jpg')
+        camera.stop_preview()   # taking a picture of the display
+        image = 'full_multi_point_2.jpg'
+        self.crop(image, (1020, 620, 1800, 1050), 'full_multi_crop_2.jpg')
+        image = 'full_multi_crop_2.jpg'
+        img = cv2.imread(image)
+        blue = img[:, :, 0]
+        red = img[:, :, 2]
+        if red.mean() > 150:
+            led_input = 1
+        else: led_input = 0
+
+        blue_data = np.zeros((self.height, self.width), dtype=float)
+        for i in range(self.height):
+            for j in range(self.width):
+                blue_data[i][j] = blue[int(self.all_points_array[i][j][0])][int(self.all_points_array[i][j][1])]
+
+        if led_input == 1:
+            signal = (blue_data - self.min_array_with_led)/(self.max_array_with_led - self.min_array_with_led)
+        else:
+            signal = (blue_data - self.min_array_without_led)/(self.max_array_without_led - self.min_array_without_led)
+
+        result_array = np.zeros((self.height, self.width), dtype=int)
+        for i in range(self.height):
+            for j in range(self.width):
+                if signal[i][j] > .7:
+                    result_array[i][j] = 1
+                else:
+                    result_array[i][j] = 0
+
+        print(signal.max(), signal.min(), signal.mean())
+
+        error_list = []
+        for i in range(self.height):
+            for j in range(self.width):
+                if not result_array[i][j] == test_array[i][j]:
+                    error_list.append((i,j))
+
+        print(str(len(error_list)) + str(input == led_input) + str(input))
         camera.close()
 
 
 if __name__ == '__main__':
     disp = Disp()
     disp.start()
+    for i in range(5):
+        disp.read_led(np.random.randint(0, 2, size=1))
