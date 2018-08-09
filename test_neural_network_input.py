@@ -20,8 +20,7 @@ from gpiozero import LED
 
 class Disp(object):
     # reading done with blue. attempting to use just 1 or 2 threshold values to be applied
-    # all over the image in order to do the data reading - the 2 threshold methods are probably 
-    # the most useful
+    # all over the image in order to do the data reading
 
     def __init__(self):
         """initialising the stuff
